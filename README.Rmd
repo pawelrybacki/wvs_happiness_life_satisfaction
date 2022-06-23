@@ -4,6 +4,9 @@ author: "Paweł Rybacki"
 date: '2020-05-11'
 output: md_document
 ---
+
+## Predicting Happiness and Life Satisfaction Globally
+
 This is my Harvard Stat 109 final project studying the main predictors of happiness and life satisfaction globally.
 
 **Research Question**
