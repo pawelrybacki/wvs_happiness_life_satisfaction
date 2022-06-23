@@ -22,11 +22,12 @@ happiness. However, the surprising little discoveries my analysis
 uncovers are a good starting point to reflect again on what brings us
 happiness and life satisfaction.
 
-**About the Files in this Repository** The main file
-`02_full_markdown.Rmd` is the markdown that conducts an analysis (using
-both code and text) of happiness and life satisfaction based on the
-longitudinal 1981-2014 [World Values Survey](www.worldvaluessurvey.org)
-data.
+**About the Files in this Repository**
+
+The main file `02_full_markdown.Rmd` is the markdown that conducts an
+analysis (using both code and text) of happiness and life satisfaction
+based on the longitudinal 1981-2014 [World Values
+Survey](www.worldvaluessurvey.org) data.
 
 Using the original WVS data, the Stata script `01_prepare_dataset.do`
 prepares and cleans the final dataset (`wvs_happiness.dta`) used by
