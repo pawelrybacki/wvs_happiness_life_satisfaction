@@ -1,0 +1,584 @@
+---
+title: "Stat 109 Final Project"
+author: "Paweł Rybacki"
+date: "May 11, 2020"
+output: word_document
+---
+
+\pagenumbering{arabic}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Predicting Happiness and Life Satisfaction Globally**
+
+**1. Research Question**
+
+What are the statistically significant predictors of 1) the feeling of
+happiness, and 2) life satisfaction?
+
+**2. Motivation**
+
+Although not all of us have a well-defined purpose of life, we all can
+feel different forms and degrees of happiness and of life satisfaction.
+When growing up, we shape our beliefs and set ourselves goals based on
+them. However, while education systems help us form our opinions and
+realize many of these goals, we often end up ignorant about what
+ultimately matters in life. The purpose of this paper is to establish
+what factors are associated with the feelings of happiness and life
+satisfaction. Since establishing casual relationships is beyond the
+scope of this paper, since one size does not always fit all, and since
+the project has many limitations, none of the results is a recipe for
+happiness. However, the surprising little discoveries my analysis
+uncovers are a good starting point to reflect again on what brings us
+happiness and life satisfaction.
+
+**3. Data**
+
+**a) Dataset**
+
+My dataset comes from the World Values Survey (WVS) and includes 98
+countries over the years 1981-2016. The WVS is an international,
+longitudinal project measuring the values, beliefs, opinions, attitudes,
+habits together with demographics from people across the globe. This is
+an excellent source of information for psychologists, sociologists,
+economists, and other social scientists. The authors boast "the largest
+non-commercial, cross-national, time series investigation of human
+beliefs and values ever executed" that helps "analyze such topics as
+economic development, democratization, religion, gender equality, social
+capital, and subjective well-being."[^1] I have previously used the
+dataset for my project on the sociopolitical determinants of trust.
+
+The original dataset contains 348,532 observations. Due to listwise
+deletion of all problematic observations, my final dataset is limited to 221,813 observations.
+
+**b) Variables**
+
+From 1,446 variables in the original dataset, I narrowed the list down
+by selection based on relevance and the number of non-problematic
+observations. As a result of variable selection and splitting into
+binaries, I obtained 32 variables in my final dataset. The variables are
+measures of different aspects of a person's life situation and values,
+such as financial situation, form of employment, health, religious
+beliefs, feeling of happiness, feeling of freedom, and other attitudes
+and habits. I renamed all variables from codes into intuitive names.
+
+For each variable in the dataset, the values of -5, -4, -3, -2, and -1
+mean 'Missing; Unknown,' 'Not asked in survey,' 'Not applicable,' 'No
+answer,' and 'Don´t know.' I replaced these negative values of each
+variable by a missing value marker (i.e. *NA* in R). Some dummies, such
+as \`sex\` are coded as '1' for the positive response and '2' for the
+negative response. I changed them into '0' meaning the negative response
+and '1' meaning the positive response: \`male\` replaced \`sex\` and is
+still indicated by '1', while females are my baseline.
+
+Factor variables in the dataset were inconsistent in terms of scale.
+Some of them took values from 0 to 10, others from 0 to 4, and others
+from 1 to 5, where a higher value did not always indicate a higher
+degree. I recoded variables so that the indicators that involved scales
+were standardized to take values between 0 and 1, where 1 is the highest
+degree of a given characteristic. This makes it no longer necessary to
+use logarithmic transformations.
+
+Although for many factor variables it made sense to standardize them (as
+above) while keeping them incremental, many were better represented when
+split into one or more binaries. One obvious example is the variable
+indicating the marital status of the respondent; I divided it into the
+\`married, \`living\_together\_as\_married\`, \`separated\`,
+\`divorced\`, and \`widowed\` binaries. Another example is the variable
+originally indicating 1 for a religious person, 2 for not a religious
+person, and 3 for a convinced atheist. I assumed "not a religious
+person" to become my baseline and added two dummies: "religious" and
+"atheist."
+
+I kept select number of variables with their original values. One of
+them was \`number\_of\_children\`, which corresponds with a tangible
+quantity.
+
+Overall, my binary variables are chosen in such a way that my baseline
+is a non-religious fully employed single female at the age of 13-24 who attends religious
+services less than once a week.
+
+  a. Preparing the dataset 
+  
+The libraries used in the analysis are the following: 
+
+```{r, eval = T, results='hide', warning=FALSE, message=FALSE} 
+library("rio")
+library("pscl")
+library("car")
+library("lmtest")
+library("tidyverse")
+library("moderndive")
+library("alpaca")
+library("ggpubr")
+library("ggplot2")
+library("psych")
+```
+
+  b. Exploring the dataset
+
+<!-- Loading and cleaning the dataset: -->
+
+```{r, echo = F, eval = T, results = "hide"}
+mydataset = import("wvs_life_satisfaction.dta")
+
+myvars <- names(mydataset) %in% c("id", "wave", "countrycode", "discusses_politics_never",
+                                  "discusses_politics_frequently", "environment_problems",
+                                  "watches_tv_3_hours")
+mydata <- mydataset[!myvars]
+
+# Listwise deletion with respect to questions not asked; listwise deletion for the negative values of the WVS was done in Stata.
+mydata <- mydata[complete.cases(mydata), ]
+```
+
+Summary statistics:
+```{r}
+describe(mydata)
+```
+
+How many people are happy, and how many are satisfied with their lives?
+
+```{r}
+ggplot(mydata, aes(x = happiness)) +
+  geom_bar()
+ggplot(mydata, aes(x = life_satisfaction)) +
+  geom_bar()
+```
+  
+  The data look good. There are a bit more women, although the gender ratio is close to 1:1. 
+Half of the people are married and have two children on average. People in the sample feel healthy and are moderately satisfied with their financial situation. They are religious and believe that God is important, but a minority attend religious services often. It is comforting to see that people feel generally happy and satisfied with their lives, although they seem overall happier than satisfied. 
+
+  
+  c.  Expanding the dataset
+
+Create non-linear terms based on the variables whose scale was 1-10:
+```{r, eval = T, results = "hide"}
+mydata[, "scale_incomes_sq"] = (mydata$scale_incomes)^2
+mydata[, "god_important_sq"] = (mydata$god_important)^2
+mydata[, "thinks_about_purpose_life_sq"] = (mydata$thinks_about_purpose_life)^2
+```
+
+```{r, eval = T, results = "hide", echo = F}
+attach(mydata)
+```
+
+
+**4) Hypothesis**
+
+I hypothesize that there is a strong correlation between life
+satisfaction and the feeling of happiness, although these two may be
+influenced by particular factors differently. For example, it could be
+the case that being religious makes you less happy due to the additional
+rules you need to obey but brings you a higher level of life
+satisfaction instead.
+
+Among the factors I expect to be strongly associated with higher
+happiness is being higher in the scale of income, being employed or
+retired, and being married. I also expect higher age, the feeling of
+freedom, the number of children, and trusting people to be weakly
+correlated with higher happiness. My expectations are similar with
+regards to life satisfaction, although perhaps the number of children
+and religiosity play a greater role.
+
+As far as factors correlated with lower happiness are concerned, I would
+expect them to include being divorced, separated, and widowed, being
+unemployed. I would guess that there is also a weak association between
+lower happiness and thinking about the purpose of life frequently (as
+melancholic people appear sadder on average), and being a woman (due to
+various adverse forms of behavior experience from men). I expect similar
+outcomes for life satisfaction, although perhaps thinking about the
+purpose of life ultimately leads people to the life of higher
+satisfaction.
+
+
+**5) Modelling and Empirical Exploration**
+
+a.  The Correlation between Happiness and Life Satisfaction
+
+```{r}
+cor(happiness, life_satisfaction)
+```
+
+The correlation between `happiness` and `life_satisfaction` is weak. This is a very surprising outcome. It would seem that these two ideas are similar. 
+
+Perhaps we would like to investigate the wording of the WVS questions. The question about happiness was as follows: "Taking all things together, would you say you are:" and its four possible answers, "Very happy," "Quite happy," "Not very happy," and "Not at all happy." I assigned the value of 1 to the first two answers, and the value of 0 to the other two answers. The life satisfaction question was the following: "All things considered, how satisfied are you with your life as a whole these days? Please use this card to help with your answer." The possible answers were numbers on the scale from 1 to 10, where 10 means "satisfied," and 1 means "dissatisfied." I assigned the value of 1 to answers between 6 and 10, and the value of 0 to the answers between 1 and 5.
+
+There are different interpretations possible. Perhaps my transformation into a binary value did not capture the possibility that people are biased toward giving higher values on a 10-point scale so that people who are dissatisfied with their lives and are unhappy would answer "Not very happy" or "Not at all happy" in the first question but would give a number like 6 in the second question. However, this would be inconsistent with the bar plots. 
+
+Another interpretation, which I assume in this analysis, is that happiness and life satisfaction are two distinct things. Perhaps happiness refers mostly to emotions while satisfaction to an unemotional outlook at one's situation. Happiness could be more influenced by things that matter more subjectively and subconsciously, while satisfaction could be more a result of a more rational and objective reflection. This would be an interesting topic for a future investigation.  
+
+b.  The Logit Model
+
+### Logit Model Assumptions
+  
+Logistic regression does not assume a linear relationship between response and explanatory variables, does not assume a normal distribution of error terms, and does not assume homoskedasticity. 
+
+However, binary logistic regression assumes:
+    
+  a.  A binary response variable. This is the case with both `happiness` and `life_satisfaction`. 
+        
+  b.  Observations independent of each other. This should be true for the World Values Survey within a country in a given year, although may be violated when combining data from all countries and years. I will address this issue in my analysis.
+        
+  c.  No perfect multicollinearity among the independent variables. I will eliminate the variables causing this problem.
+        
+  d.  Linearity of independent variables and log odds. This means that I should not have continuous independent variables. The only variable that potentially could have caused a problem was the variable `age`, which I divided into `age_13_24`, `age_25_40`, `age_41_60`, `age_61_80`, and `age_81_more`. I chose the age between 13 and 24 (inclusive) as my baseline. 
+        
+  e.  A large sample size. With hundreds of thousands of observations, this is not an issue in my study. 
+
+### Proposing the Logit Model
+    
+By including all the explanatory variables from my dataset, I propose the following model for `happiness`:
+
+```{r}
+h_model_full_formula <- happiness ~ male + age_25_40 + age_41_60 + age_61_80 + age_81_more + 
+  married + living_together_as_maried + divorced + separated + 
+  widowed + number_of_children + financial_satisfaction + scale_incomes + scale_incomes_sq + 
+  part_time + self_employed + retired + housewife + student + 
+  unemployed + trust + freedom_choice_control + health + thinks_about_purpose_life + 
+  thinks_about_purpose_life_sq + god_important + god_important_sq + 
+  religious + atheist + attend_church_often
+```
+
+and the following model for `life satisfaction`:
+
+```{r}
+s_model_full_formula <- life_satisfaction ~ male + age_25_40 + age_41_60 + age_61_80 + age_81_more + 
+  married + living_together_as_maried + divorced + separated + 
+  widowed + number_of_children + financial_satisfaction + scale_incomes + scale_incomes_sq + 
+  part_time + self_employed + retired + housewife + student + 
+  unemployed + trust + freedom_choice_control + health + thinks_about_purpose_life + 
+  thinks_about_purpose_life_sq + god_important + god_important_sq + 
+  religious + atheist + attend_church_often
+```
+
+I fit both, along with their null versions, into a general linear model function in R:
+
+```{r}
+h_model_full = glm(formula <- h_model_full_formula, family = binomial(link = "logit"))
+h_model_null = glm(formula = happiness ~ 1, family = binomial(link = "logit"))
+
+s_model_full = glm(formula <- s_model_full_formula, family = binomial(link = "logit"))
+s_model_null = glm(formula = life_satisfaction ~ 1, family = binomial(link = "logit"))
+```
+
+##  Refining the Logit Model
+
+  a. Stepwise Regression
+
+Now, by looking at regression output summaries, I could remove each statistically insignificant variable in my model, but I prefer to use the backward stepwise selection algorithm to do this for me.
+
+I use the following code:
+
+```{r, eval = F}
+h_model_backward <- step(h_model_full, scope = list(lower = h_model_null), direction = "backward", trace= F)
+h_model_backward_formula <- formula(h_model_backward)
+
+s_model_backward <- step(s_model_full, scope = list(lower = s_model_null), direction = "backward", trace= F)
+s_model_backward_formula <- formula(s_model_backward)
+```
+
+```{r, eval = T, results='hide', echo = F}
+h_model_backward_formula <- happiness ~ male + age_25_40 + age_41_60 + age_61_80 + age_81_more + 
+  married + living_together_as_maried + divorced + separated + 
+  widowed + financial_satisfaction + scale_incomes + scale_incomes_sq + 
+  part_time + self_employed + retired + housewife + student + 
+  unemployed + trust + freedom_choice_control + health + thinks_about_purpose_life + 
+  thinks_about_purpose_life_sq + god_important + god_important_sq + 
+  religious + attend_church_often
+
+s_model_backward_formula <- life_satisfaction ~ male + age_25_40 + age_41_60 + age_61_80 + 
+    age_81_more + married + living_together_as_maried + divorced + 
+    separated + widowed + number_of_children + financial_satisfaction + 
+    scale_incomes_sq + self_employed + housewife + unemployed + 
+    trust + freedom_choice_control + health + thinks_about_purpose_life_sq + 
+    god_important + god_important_sq + religious + attend_church_often
+```
+
+And I obtain the following results:
+
+```{r, echo = F}
+h_model_backward_formula
+s_model_backward_formula
+```
+
+The algorithm excluded `number of children` and `atheist` in the case of `happiness`, and `scale_incomes`, `retired`, `student`, `thinks_about_purpose_life`, and `atheist` in the case of life satisfaction.
+
+I fit both into a general linear model function:
+
+```{r}
+h_model_backward <- glm(formula <- h_model_backward_formula, family = binomial(link = "logit"))
+s_model_backward <- glm(formula <- s_model_backward_formula, family = binomial(link = "logit"))
+```
+
+  b. Goodsness of Fit Selection
+
+I now compare the AIC scores for full models and for stepwise-selected models:
+
+```{r}
+AIC(h_model_full)
+AIC(h_model_backward)
+AIC(s_model_full)
+AIC(s_model_backward)
+```
+
+I conclude that the stepwise model is a better fit in both cases. The differences are not large, suggesting that the full models were already good, and a large majority of the exploratory variables I selected are relevant for the study. 
+
+  c. Eliminating Perfect Multicollinearity
+
+Now, I check for multicollinearity for both models by using the `vif()` command:
+
+```{r}
+vif(h_model_backward)
+vif(s_model_backward)
+```
+
+High VIF's are generated because of the inclusion of the non-linear terms. I address this issue for each model separately, by eliminating one variable with the highest VIF score at a time. 
+
+```{r, eval = T, results='hide', echo = F}
+h_model_backward_formula <- update(h_model_backward_formula, . ~ . - thinks_about_purpose_life)
+h_model_backward <- glm(formula <- h_model_backward_formula, family = binomial(link = "logit"))
+vif(h_model_backward)
+
+h_model_backward_formula <- update(h_model_backward_formula, . ~ . - god_important)
+h_model_backward <- glm(formula <- h_model_backward_formula, family = binomial(link = "logit"))
+vif(h_model_backward)
+
+h_model_backward_formula <- update(h_model_backward_formula, . ~ . - scale_incomes)
+h_model_backward <- glm(formula <- h_model_backward_formula, family = binomial(link = "logit"))
+vif(h_model_backward)
+```
+
+The formula updating process results in the elimination of `thinks_about_purpose_life`, `god_important`, and `scale_incomes` (the latter was not higher than 10 exactly, but close to it), after which I obtain the following `happiness` model without evidence for perfect multicollinearity:
+
+```{r}
+h_model_backward_formula
+vif(h_model_backward)
+```
+
+```{r, eval = T, results='hide', echo = F}
+s_model_backward_formula <- update(s_model_backward_formula, . ~ . - god_important)
+s_model_backward <- glm(formula <- s_model_backward_formula, family = binomial(link = "logit"))
+vif(s_model_backward)
+```
+
+I repeat the process for `life_satisfaction` and remove only `god_important`. Note that the other redundant variables resulting from the inclusion of non-linear terms were already removed with the AIC selection process. I obtain the following formula and VIF scores:
+
+```{r}
+s_model_backward_formula
+vif(s_model_backward)
+```
+
+  d. Assessing the goodness of fit:
+
+I look at the goodness of fit using pseudo-R squared:
+
+```{r}
+pR2(h_model_backward)
+pR2(s_model_backward)
+```
+
+The McFadden pseudo-R squared scores of $0.18$ for the happiness model and $0.25$ for the life satisfaction model are very low. However, it is important to remember that there are potentially thousands of factors that influence people's feelings of happiness and of life satisfaction, and the variables included in the dataset are just some of them, even if plausibly the most important ones.
+
+  e.  Controlling for fixed effects
+
+There is a relatively new library called `alpaca`, which was released in 2016. It includes `feglm()` and `biasCorr()` for logit models with time- and entity-specific fixed effects. This is a good choice for my international longitudinal dataset. 
+
+I fit it use it as follows: 
+
+```{r}
+# Fit the happiness model
+h_model_fe <- feglm(happiness ~ male + age_25_40 + age_41_60 + age_61_80 + age_81_more + 
+    married + living_together_as_maried + divorced + separated + 
+    widowed + financial_satisfaction + scale_incomes_sq + part_time + 
+    self_employed + retired + housewife + student + unemployed + 
+    trust + freedom_choice_control + health + thinks_about_purpose_life_sq + 
+    god_important_sq + religious + attend_church_often | country_name + year, mydata, binomial("logit"))
+# Bias correction routine
+h_model_fe <- biasCorr(h_model_fe)
+
+# Fit the life_satisfaction model
+s_model_fe <- feglm(life_satisfaction ~ male + age_25_40 + age_41_60 + age_61_80 + 
+    age_81_more + married + living_together_as_maried + divorced + 
+    separated + widowed + number_of_children + financial_satisfaction + 
+    scale_incomes_sq + self_employed + housewife + unemployed + 
+    trust + freedom_choice_control + health + thinks_about_purpose_life_sq + 
+    god_important_sq + religious + attend_church_often | 
+                      country_name + year, mydata, binomial("logit"))
+# Bias correction routine
+s_model_fe <- biasCorr(s_model_fe)
+```
+
+I obtain the following regression summaries:
+
+```{r}
+# with the "sandwitch" mode, we obtain heteroskdasticity-robust standard errors:
+summary(h_model_fe, "sandwich")
+summary(s_model_fe, "sandwich")
+```
+
+
+**6) Limitations and Challenges**
+
+There are important limitations and challenges to my results.
+
+A serious problem with my dataset is that I used listwise deletion for
+problematic observations (such as missing observations or answers like
+"I don't know"), as this method is known for producing biased estimates.
+A multiple imputation procedure for binary logistic regression would
+have been a significantly better alternative.
+
+I prioritized the number of non-problematic observations and selected
+questions with the most frequently available answers. I did this by
+going through the WVS codebook. However, if I had more time, I could
+have relaxed my expectations regarding the number of observations, and I
+could have left it to the AIC/BIC algorithm to choose the most relevant
+variables.
+
+The order in which I was refining my model was debatable. I introduced
+fixed effects of years and countries as a final step rather doing that
+in my initial model. However, this is due to the limited availability of
+beginner-friendly tools for fixed effects in logit. In fact, the models
+obtained with the `glmfe()` functions are not yet testable with tests
+such as the `AIC(), pR2``()` or ` b``ptest().`
+
+Moreover, my model was not tested for its predictive power. Perhaps
+there is much work yet to be done with improving the specification.
+While I added three squared variables to my initial model, I could have
+tried different transformations of many more variables, expanding the
+list with interaction terms and higher-degree polynomials. Therefore, my
+conclusions mostly pertain to the significance of variables and relative
+magnitudes of their effects.
+
+Although happiness and life satisfaction entered my regressions as
+dependent variables and I describe my results mostly within this
+framework, my analysis does not suggest any direction of causality
+between two variables.
+
+The listed potential issues are the problems I knew about but could not
+address to due time constrains. However, as I do not have much
+experience in working with categorical data, there are potentially many
+more errors that could have entered my analysis. For example, the
+process of cleaning data and recoding variables could have been
+imperfect.
+
+**7) Discussion**
+
+Perhaps the largest surprise of my results is that there is only a weak
+correlation between happiness and life satisfaction. As I discussed in
+the results section, it could be because these two concepts are truly
+distinct and perhaps represent a "heart-reason" divergence. Regardless
+of the weak correlation, there is no estimate that would change its sign
+from model to model. The only differences between the outcomes pertain
+to the magnitudes or, in few cases, the significance levels of the
+results.
+
+Another interesting result is that men are significantly less happy and
+less satisfied with their lives than women, even after controlling for
+many other factors. This is contrary to my hypothesis. It may have to do
+either with genes and metabolism or with cultural norms. Perhaps men's
+well-known lower risk aversion leads them to doing things that have
+seriously negative consequences, and the individuals who face these
+consequences drive the coefficients down. Alternatively, male hormones
+make men feel less happy and optimistic. This would be a fascinating
+topic for further investigation.
+
+Metabolism and homeostasis impact our spirits, not just our bodies.
+Health is the largest predictor of happiness and the third largest
+predictor of life satisfaction (yielding to financial satisfaction and
+the feeling of freedom). A part of this effect may be a comorbidity of
+physical health deficiency with mental health diseases. However, it is
+also important to remember that this is self-assessed health, so general
+pessimism may influence both answers. Regardless, a takeaway is that
+there are few things that can compensate health.
+
+The relationship between the dependent variables of interest and age is
+negative. Interestingly, in regressions without fixed effects (not
+reported), it seemed that age was positively correlated with happiness
+and life satisfaction. Perhaps that effect was driven by richer and
+older societies. The final outcome could be interpreted as a reflection
+of the possibility that people care a lot about aspects of being young,
+such as appearance or having more energy.
+
+Married people are the happiest and the most satisfied with their lives,
+holding the number of children constant. The effect is particularly high
+for happiness. Those who "live as married" are not far behind in both
+categories. As expected, being divorced, separated, and widowed makes
+you less happy or satisfied with your life even compared to being
+single. Interestingly, being separated, rather than divorced, makes you
+the saddest. Overall, with the strongest effect of all, marriage seems a
+worthwhile risk. When it comes to children, they do bring satisfaction,
+but surprisingly little of it. Although many moms and dads claim to be
+the happiest people on Earth, the AIC algorithm challenged their
+declarations to some extent by deleting the variable.
+
+If you do not work, you can as happy as a student, to whom college
+brings as many positive feelings as religion to the religious people; as
+sad as an unemployed, for whom their situation is even worse than for
+those separated; or somewhere in-between, as the retired who are not
+statistically significantly different than the fully employed.
+Housewives (or househusbands) are generally happier and more satisfied
+with their lives than the fully employed, although without enough
+statistical evidence for the latter feeling.
+
+When looking at financial satisfaction and the scale of incomes, it
+seems that money is everything. The former beats every other variable,
+except for health, by a lot in both models. Or, people who generally
+feel better about everything have more energy to earn more. Since the
+scale of incomes is represented by a squared term, I could infer that
+its positive coefficient tells us that being average is the saddest and
+least satisfying position in society. If you have not made it to the
+top, you may be better off by giving away everything like St. Francis.
+
+Speaking of religion, being religious and going to church often is
+associated with higher happiness and life satisfaction, although the
+effects are not enormous. Reflecting on the sense of your life makes 
+sense when you do it in moderation; too little or too much contemplation
+seems to make you less happy and less satisfied with your life.  
+Similarly, the importance of God has a quadratic
+relationship with happiness and life satisfaction, which means that it
+is worth being decided in the spiritual realm. This reminds me of the
+biblical quote: "So, because you are lukewarm, neither hot nor cold, I
+will spit you out of my mouth." (Revelation 3, 16).
+
+Trusting in God makes you feel good, and so does trusting in other
+people. Or, feeling good makes you trust more in both. In any case, the
+association is moderately strong for happiness and life satisfaction,
+with emphasis on the former.
+
+Last but not least, the feeling of freedom of choice and control over
+your life is one of the most important things for happiness and life
+satisfaction. According to my model, freedom brings more satisfaction
+than marriage, children, health, or religion. As I am writing this from
+home abroad, this makes me miss the Land of Freedom even more.
+
+**8) Conclusion**
+
+In conclusion, the recipe for happiness and life satisfaction is hard to
+obtain using scientific methods. However, the more careful the
+statistical analysis, the better chance that we understand what makes
+people across the globe feel better. My project is just the first step
+in this process, and there are still more things I did not consider than
+those I took into account. From data collection, through data cleaning,
+to data analysis, my outcomes rely and numerous assumptions. However, I
+hope that the imperfections of my study and the preliminary results can
+serve as an inspiration for future investigation. As of now, the WVS
+data suggest that the *average* key to happiness and life satisfaction
+is being a healthy married young woman with a few children, who is a
+pious and religious student, trusts other people, and enjoys has lots of
+freedom as well as good economic conditions. Certainly, there is at
+least one omitted variable: `took_stat_109`.
+
+**[References]{.smallcaps}**
+
+[WORLD VALUES SURVEY 1981-2014 LONGITUDINAL AGGREGATE v.20150418. World
+Values Survey Association (www.worldvaluessurvey.org). Aggregate File
+Producer: JDSystems, Madrid SPAIN.]{.smallcaps}
+
+<https://www.statisticssolutions.com/assumptions-of-logistic-regression/>
+
+<https://www.statisticssolutions.com/wp-content/uploads/wp-post-to-pdf-enhanced-cache/1/assumptions-of-logistic-regression.pdf>
+
+[^1]: <http://www.worldvaluessurvey.org/WVSContents.jsp>
+
