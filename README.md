@@ -1,3 +1,5 @@
+## Predicting Happiness and Life Satisfaction Globally
+
 This is my Harvard Stat 109 final project studying the main predictors
 of happiness and life satisfaction globally.
 
